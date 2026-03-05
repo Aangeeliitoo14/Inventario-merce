@@ -24,7 +24,6 @@
 
       onSnapshot(invCol, (snap) => {
         listaLocal = snap.docs.map(d => ({ ...d.data(), id: d.id }));
-        // Orden alfabético automático
         listaLocal.sort((a, b) => a.nombre.localeCompare(b.nombre));
         dibujarTabla(listaLocal);
       });
@@ -62,8 +61,17 @@
         input.value = '';
       };
 
+      window.editarNombre = async (id, actual) => {
+        const n = prompt("Nuevo nombre:", actual);
+        if (n && n !== actual) await updateDoc(doc(db, "productos", id), { nombre: n });
+      };
+
+      window.borrar = async (id) => { 
+        if(confirm("¿Borrar este producto?")) await deleteDoc(doc(db, "productos", id)); 
+      };
+
       window.resetearDia = async () => {
-        if(confirm("¿Poner Tienda y Collblanc a 0?")) {
+        if(confirm("¿Poner Tiendas a 0?")) {
             const promesas = listaLocal.map(p => updateDoc(doc(db, "productos", p.id), { tienda: 0, collblanc: 0 }));
             await Promise.all(promesas);
         }
@@ -72,7 +80,11 @@
       window.dibujarTabla = (productos) => {
         document.getElementById('tabla').innerHTML = productos.map(p => `
             <tr>
-                <td style="text-align:left"><b>${p.nombre}</b></td>
+                <td style="text-align:left">
+                    <span style="opacity:0.2; font-size:10px;" onclick="borrar('${p.id}')">🗑️</span>
+                    <b>${p.nombre}</b>
+                    <span style="opacity:0.5;" onclick="editarNombre('${p.id}', '${p.nombre}')">📝</span>
+                </td>
                 <td class="bg-stock">
                     <span class="badge">${p.almacen || 0}</span><br>
                     <input type="number" id="in-alm-${p.id}" class="small-input" placeholder="0">
