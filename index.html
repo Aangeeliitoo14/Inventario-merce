@@ -23,8 +23,14 @@
       let listaLocal = [];
 
       onSnapshot(invCol, (snap) => {
-        listaLocal = snap.docs.map(d => ({ ...d.data(), id: d.id }));
-        dibujarTabla(listaLocal);
+  listaLocal = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+  
+  // Esta línea ordena alfabéticamente de la A a la Z
+  listaLocal.sort((a, b) => a.nombre.localeCompare(b.nombre));
+  
+  dibujarTabla(listaLocal);
+});
+
       });
 
       window.crearProducto = async () => {
