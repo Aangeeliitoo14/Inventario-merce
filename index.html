@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventario Merce Pro - Control de Stock</title>
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+      import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+      const firebaseConfig = {
+        apiKey: "AIzaSyDqJlFee1MVBjKEHZZyBKHZ6u69F1P4U0s",
+        authDomain: "inventario-merce.firebaseapp.com",
+        projectId: "inventario-merce",
+        storageBucket: "inventario-merce.firebasestorage.app",
+        messagingSenderId: "656395871608",
+        appId: "1:656395871608:web:36320543205b1c58601c8d"
+      };
+
+      const app = initializeApp(firebaseConfig);
+      const db = getFirestore(app);
+      const invCol = collection(db, "productos");
+      let listaLocal = [];
+
+      window.crearProducto = async () => {
+        const nom = document.getElementById('n').value;
+        const cant = parseInt(document.getElementById('c').value) || 0;
+        if(nom) {
+            await addDoc(invCol, { nombre: nom, almacen: cant, tienda: 0, collblanc: 0 });
+            document.getElementById('n').value = ''; document.getElementById('c').value = '';
+        }
+      };
+
+      onSnapshot(invCol, (snap) => {
+        listaLocal = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+        dibujarTabla(listaLocal);
+      });
+
+      window.dibujarTabla = (productos) => {
+        const t = document.getElementById('tabla');
+        t.innerHTML = productos.map(p => {
+            const alm = p.almacen || 0;
+            const tda = p.tienda || 0;
+            const col = p.collblanc || 0;
+
+            return `
+            <tr>
+                <td style="text-align:left">
+                    <small onclick="borrar('${p.id}')" style="cursor:pointer; opacity:0.2">🗑️</small>
+                    <b>${p.nombre}</b> 
+                    <button onclick="editarNombre('${p.id}', '${p.nombre}')" class="btn-ghost">📝</button>
+                </td>
+                
+                <td class="bg-stock">
+                    <span class="badge">${alm}</span><br>
+                    <input type="number" id="in-alm-${p.id}" class="small-input" placeholder="0">
+                    <div class="btn-group">
+                        <button class="b-g" onclick="ajustarStock('${p.id}', ${alm}, 'sumar', 'almacen')">+</button>
+                        <button class="b-r" onclick="ajustarStock('${p.id}', ${alm}, 'restar', 'almacen')">-</button>
+                    </div>
+                </td>
+
+                <td class="bg-tienda">
+                    <span class="badge blue">${tda}</span><br>
+                    <input type="number" id="in-tda-${p.id}" class="small-input" placeholder="0">
+                    <div class="btn-group">
+                        <button class="b-g" onclick="ajustarStock('${p.id}', ${tda}, 'sumar', 'tienda')">+</button>
+                        <button class="b-r" onclick="ajustarStock('${p.id}', ${tda}, 'restar', 'tienda')">-</button>
+                        <button class="b-o" title="Mover desde Almacén" onclick="moverStock('${p.id}', ${alm}, ${tda}, 'tienda')">↑</button>
+                    </div>
+                </td>
+
+                <td class="bg-coll">
+                    <span class="badge purple">${col}</span><br>
+                    <input type="number" id="in-col-${p.id}" class="small-input" placeholder="0">
+                    <div class="btn-group">
+                        <button class="b-g" onclick="ajustarStock('${p.id}', ${col}, 'sumar', 'collblanc')">+</button>
+                        <button class="b-r" onclick="ajustarStock('${p.id}', ${col}, 'restar', 'collblanc')">-</button>
+                        <button class="b-p" title="Mover desde Almacén" onclick="moverStock('${p.id}', ${alm}, ${col}, 'collblanc')">↑</button>
+                    </div>
+                </td>
+            </tr>`;
+        }).join('');
+      };
+
+      window.ajustarStock = async (id, actual, operacion, campo) => {
+        const prefix = campo === 'almacen' ? 'alm' : (campo === 'tienda' ? 'tda' : 'col');
+        const input = document.getElementById(`in-${prefix}-${id}`);
+        const valor = parseInt(input.value) || 0;
+        if (valor <= 0) return;
+
+        let nuevoTotal = operacion === 'sumar' ? actual + valor : actual - valor;
+        if (nuevoTotal < 0) nuevoTotal = 0;
+
+        const updateData = {};
+        updateData[campo] = nuevoTotal;
+        await updateDoc(doc(db, "productos", id), updateData);
+        input.value = '';
+      };
+
+      window.moverStock = async (id, almActual, destinoActual, campoDestino) => {
+        const prefix = campoDestino === 'tienda' ? 'tda' : 'col';
+        const input = document.getElementById(`in-${prefix}-${id}`);
+        const cant = parseInt(input.value) || 0;
+
+        if(cant > 0 && almActual >= cant) {
+            const updateData = { almacen: almActual - cant };
+            updateData[campoDestino] = destinoActual + cant;
+            await updateDoc(doc(db, "productos", id), updateData);
+            input.value = '';
+        } else {
+            alert("Verifica la cantidad o el stock en Almacén");
+        }
+      };
+
+      window.filtrar = () => {
+        const busqueda = document.getElementById('lupa').value.toLowerCase();
+        dibujarTabla(listaLocal.filter(p => p.nombre.toLowerCase().includes(busqueda)));
+      };
+
+      window.editarNombre = async (id, actual) => {
+        const n = prompt("Nuevo nombre:", actual);
+        if (n) await updateDoc(doc(db, "productos", id), { nombre: n });
+      };
+
+      window.borrar = async (id) => { if(confirm("¿Borrar?")) await deleteDoc(doc(db, "productos", id)); };
+    </script>
+    <style>
+        body { font-family: sans-serif; padding: 10px; background: #f0f2f5; font-size: 12px; }
+        .box { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); max-width: 950px; margin: auto; }
+        h3 { text-align: center; color: #333; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th { background: #eee; padding: 8px; font-size: 10px; color: #555; }
+        td { padding: 10px 4px; border-bottom: 1px solid #eee; text-align: center; }
+
+        .small-input { width: 35px; padding: 4px; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 4px; text-align: center; }
+        
+        button { border: none; border-radius: 4px; padding: 4px 8px; color: white; cursor: pointer; font-weight: bold; }
+        .b-g { background: #28a745; } 
+        .b-r { background: #dc3545; } 
+        .b-o { background: #fd7e14; } 
+        .b-p { background: #6f42c1; } 
+        .b-b { background: #007bff; width: 100%; padding: 10px; font-size: 14px; margin-top: 10px; }
+        
+        .btn-group { display: flex; justify-content: center; gap: 2px; }
+        .badge { background: #333; color: white; padding: 2px 6px; border-radius: 8px; font-size: 13px; display: inline-block; margin-bottom: 4px; }
+        .badge.blue { background: #007bff; }
+        .badge.purple { background: #6f42c1; }
+
+        .bg-stock { background: #f8f9fa; }
+        .bg-tienda { background: #fffdf5; }
+        .bg-coll { background: #fcfaff; }
+
+        .search-container { margin: 15px 0; position: relative; }
+        .lupa-input { width: 100%; padding: 10px 10px 10px 35px; border-radius: 8px; border: 1px solid #ddd; box-sizing: border-box; }
+        .icon-lupa { position: absolute; left: 12px; top: 10px; color: #888; }
+        .btn-ghost { background: none; color: #ccc; padding: 0; }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <h3>📦 Gestión Merce Cloud</h3>
+        
+        <div style="display: flex; gap: 8px;">
+            <input type="text" id="n" placeholder="Producto..." style="flex: 2; padding: 8px;">
+            <input type="number" id="c" placeholder="Stock" style="width: 60px; padding: 8px;">
+            <button class="b-b" onclick="crearProducto()" style="margin: 0;">Añadir</button>
+        </div>
+
+        <div class="search-container">
+            <span class="icon-lupa">🔍</span>
+            <input type="text" id="lupa" class="lupa-input" placeholder="Buscar producto..." onkeyup="filtrar()">
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 25%;">Item</th>
+                    <th style="width: 20%;">Almacén</th>
+                    <th style="width: 27%;">Tienda</th>
+                    <th style="width: 27%;">Collblanc</th>
+                </tr>
+            </thead>
+            <tbody id="tabla"></tbody>
+        </table>
+    </div>
+</body>
+</html>
