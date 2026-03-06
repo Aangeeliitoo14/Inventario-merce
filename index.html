@@ -24,16 +24,16 @@
 
       onSnapshot(invCol, (snap) => {
         listaLocal = snap.docs.map(d => ({ ...d.data(), id: d.id }));
-        listaLocal.sort((a, b) => a.nombre.localeCompare(b.nombre));
         dibujarTabla(listaLocal);
       });
 
       window.crearProducto = async () => {
         const nom = document.getElementById('n').value;
+        const fam = document.getElementById('f').value || "General";
         const cant = parseInt(document.getElementById('c').value) || 0;
         if(nom) {
-            await addDoc(invCol, { nombre: nom, almacen: cant, tienda: 0, collblanc: 0 });
-            document.getElementById('n').value = ''; document.getElementById('c').value = '';
+            await addDoc(invCol, { nombre: nom, familia: fam, almacen: cant, tienda: 0, collblanc: 0 });
+            document.getElementById('n').value = ''; document.getElementById('f').value = ''; document.getElementById('c').value = '';
         }
       };
 
@@ -61,9 +61,16 @@
         input.value = '';
       };
 
-      window.editarNombre = async (id, actual) => {
-        const n = prompt("Nuevo nombre:", actual);
-        if (n && n !== actual) await updateDoc(doc(db, "productos", id), { nombre: n });
+      window.editarProducto = async (id, actualNom, actualFam) => {
+        const nuevoNom = prompt("Nuevo nombre:", actualNom);
+        if (nuevoNom === null) return;
+        const nuevaFam = prompt("Nueva familia:", actualFam || "General");
+        if (nuevaFam === null) return;
+        
+        await updateDoc(doc(db, "productos", id), { 
+            nombre: nuevoNom, 
+            familia: nuevaFam 
+        });
       };
 
       window.borrar = async (id) => { 
@@ -78,12 +85,29 @@
       };
 
       window.dibujarTabla = (productos) => {
-        document.getElementById('tabla').innerHTML = productos.map(p => `
+        productos.sort((a, b) => {
+            const famA = (a.familia || "General").toLowerCase();
+            const famB = (b.familia || "General").toLowerCase();
+            if (famA < famB) return -1;
+            if (famA > famB) return 1;
+            return a.nombre.localeCompare(b.nombre);
+        });
+
+        let html = '';
+        let familiaActual = '';
+
+        productos.forEach(p => {
+            const fam = p.familia || "General";
+            if (fam !== familiaActual) {
+                familiaActual = fam;
+                html += `<tr class="fila-familia"><td colspan="4">📂 ${familiaActual.toUpperCase()}</td></tr>`;
+            }
+            html += `
             <tr>
                 <td style="text-align:left">
                     <span style="opacity:0.2; font-size:10px;" onclick="borrar('${p.id}')">🗑️</span>
                     <b>${p.nombre}</b>
-                    <span style="opacity:0.5;" onclick="editarNombre('${p.id}', '${p.nombre}')">📝</span>
+                    <span style="cursor:pointer; opacity:0.5;" onclick="editarProducto('${p.id}', '${p.nombre}', '${p.familia || 'General'}')">📝</span>
                 </td>
                 <td class="bg-stock">
                     <span class="badge">${p.almacen || 0}</span><br>
@@ -106,12 +130,17 @@
                         <button class="b-r" onclick="ajustarStock('${p.id}', ${p.collblanc || 0}, 'restar', 'collblanc')">-</button>
                     </div>
                 </td>
-            </tr>`).join('');
+            </tr>`;
+        });
+        document.getElementById('tabla').innerHTML = html;
       };
 
       window.filtrar = () => {
         const busqueda = document.getElementById('lupa').value.toLowerCase();
-        dibujarTabla(listaLocal.filter(p => p.nombre.toLowerCase().includes(busqueda)));
+        dibujarTabla(listaLocal.filter(p => 
+            p.nombre.toLowerCase().includes(busqueda) || 
+            (p.familia && p.familia.toLowerCase().includes(busqueda))
+        ));
       };
     </script>
     <style>
@@ -127,18 +156,25 @@
         .search-container { margin: 10px 0; }
         .lupa-input { width: 100%; padding: 8px; border-radius: 8px; border: 1px solid #ddd; box-sizing: border-box; }
         h3 { margin-top: 0; text-align: center; color: #333; text-transform: uppercase; letter-spacing: 1px; }
+        .fila-familia { background: #f8f9fa; font-weight: bold; color: #1a73e8; text-align: left !important; }
+        .fila-familia td { padding: 8px 10px; border-bottom: 2px solid #e8f0fe; font-size: 12px; }
     </style>
 </head>
 <body>
     <div class="box">
         <h3>🥜 Angel Frutos Secos</h3>
-        <div style="display: flex; gap: 5px; margin-bottom: 10px;">
-            <input type="text" id="n" placeholder="Producto..." style="flex: 2; padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
-            <input type="number" id="c" placeholder="Cant" style="width: 50px; border-radius: 4px; border: 1px solid #ccc;">
-            <button class="b-b" onclick="crearProducto()">Add</button>
+        <div style="display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px;">
+            <div style="display: flex; gap: 5px;">
+                <input type="text" id="n" placeholder="Producto..." style="flex: 2; padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
+                <input type="number" id="c" placeholder="Cant" style="width: 50px; border-radius: 4px; border: 1px solid #ccc;">
+            </div>
+            <div style="display: flex; gap: 5px;">
+                <input type="text" id="f" placeholder="Familia (Ej: Almendras)" style="flex: 1; padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
+                <button class="b-b" onclick="crearProducto()" style="padding: 0 20px;">AÑADIR</button>
+            </div>
         </div>
         <div class="search-container">
-            <input type="text" id="lupa" class="lupa-input" placeholder="🔍 Buscar..." onkeyup="filtrar()">
+            <input type="text" id="lupa" class="lupa-input" placeholder="🔍 Buscar por nombre o familia..." onkeyup="filtrar()">
         </div>
         <table>
             <thead>
